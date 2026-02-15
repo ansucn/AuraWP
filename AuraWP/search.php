@@ -36,7 +36,7 @@
                 ]); ?>
             </div>
         <?php else : ?>
-            <p style="text-align: center; padding: 2rem; color: #888;">未找到相关内容</p>
+            <p style="text-align: center; padding: 2rem; color: #888;">未找到匹配结果</p>
         <?php endif; ?>
     </main>
 

@@ -1,141 +1,127 @@
 <?php
 /**
- * AuraWP Theme Functions
+ * AuraWP functions and definitions
+ *
+ * @package AuraWP
  */
 
-if (!function_exists('aurawp_setup')) :
-    function aurawp_setup() {
-        add_theme_support('title-tag');
-        add_theme_support('post-thumbnails');
-        add_theme_support('html5', ['search-form', 'comment-form', 'comment-list', 'gallery', 'caption']);
-        add_theme_support('custom-logo', [
-            'height'      => 60,
-            'width'       => 200,
-            'flex-height' => true,
-            'flex-width'  => true,
-        ]);
-        register_nav_menus([
-            'primary' => esc_html__('Primary Menu', 'aurawp'),
-        ]);
-    }
-endif;
-add_action('after_setup_theme', 'aurawp_setup');
-
-// 启用会话（用于验证码）
+// 启动 session（用于可能的下载统计）
 if (!session_id()) {
     session_start();
 }
 
-// 生成验证码
-function aurawp_generate_captcha() {
-    $code = substr(str_shuffle("0123456789abcdefghijklmnopqrstuvwxyz"), 0, 5);
-    $_SESSION['download_captcha'] = strtolower($code);
-    return $code;
-}
+// 主题设置
+function aurawp_setup() {
+    // 添加导航菜单支持 ←←← 新增此行
+    register_nav_menus(array(
+        'primary' => __('主菜单', 'aurawp'),
+    ));
 
-// 验证验证码
-function aurawp_verify_captcha($input) {
-    if (!isset($_SESSION['download_captcha'])) return false;
-    return strtolower(trim($input)) === $_SESSION['download_captcha'];
-}
+    // 添加文章缩略图支持
+    add_theme_support('post-thumbnails');
 
-// 注册下载页面模板
-function aurawp_add_download_template($templates) {
-    $templates['page-download.php'] = '下载页面';
-    return $templates;
-}
-add_filter('theme_page_templates', 'aurawp_add_download_template');
+    // 自动 feed 链接
+    add_theme_support('automatic-feed-links');
 
+    // 古腾堡编辑器样式支持
+    add_theme_support('wp-block-styles');
+
+    // 响应式嵌入内容
+    add_theme_support('responsive-embeds');
+}
+add_action('after_setup_theme', 'aurawp_setup');
+
+// 加载 CSS 和 JavaScript
 function aurawp_scripts() {
-    wp_enqueue_style('aurawp-style', get_template_directory_uri() . '/assets/css/style.min.css', [], '2.0');
-    
-    // 默认配色：参考 Astra / Kadence 等高分主题
-    $accent = get_theme_mod('aurawp_accent_color', '#1abc9c');
-    $body_bg = get_theme_mod('aurawp_body_bg', '#f4f6f9');
-    $content_bg = get_theme_mod('aurawp_content_bg', '#ffffff');
-    $text_color = get_theme_mod('aurawp_text_color', '#3a4149');
-
-    wp_add_inline_style('aurawp-style', ":root {
-        --accent: {$accent};
-        --accent-hover: " . aurawp_adjust_color($accent, -12) . ";
-        --body-bg: {$body_bg};
-        --content-bg: {$content_bg};
-        --text-color: {$text_color};
-        --text-light: #6b7280;
-        --border-color: #e0e5eb;
-        --shadow: 0 4px 12px rgba(0,0,0,0.05);
-        --radius: 12px;
-    }");
-
-    wp_enqueue_script('aurawp-main', get_template_directory_uri() . '/assets/js/main.js', ['jquery'], '2.0', true);
-    wp_localize_script('aurawp-main', 'aurawpData', [
-        'ajax_url' => admin_url('admin-ajax.php'),
-        'is_home'  => is_front_page(),
-    ]);
+    wp_enqueue_style('aurawp-style', get_stylesheet_uri());
 }
 add_action('wp_enqueue_scripts', 'aurawp_scripts');
 
-function aurawp_widgets_init() {
-    register_sidebar([
-        'name'          => esc_html__('Sidebar', 'aurawp'),
-        'id'            => 'sidebar-1',
-        'description'   => esc_html__('Add widgets here.', 'aurawp'),
-        'before_widget' => '<section class="widget">',
-        'after_widget'  => '</section>',
-        'before_title'  => '<h2 class="widget-title">',
-        'after_title'   => '</h2>',
-    ]);
-}
-add_action('widgets_init', 'aurawp_widgets_init');
-
-function aurawp_adjust_color($hex, $percent) {
-    $hex = ltrim($hex, '#');
-    if (strlen($hex) == 3) {
-        $hex = str_repeat(substr($hex,0,1),2) . str_repeat(substr($hex,1,1),2) . str_repeat(substr($hex,2,1),2);
-    }
-    $r = hexdec(substr($hex,0,2));
-    $g = hexdec(substr($hex,2,2));
-    $b = hexdec(substr($hex,4,2));
-    $r = max(0, min(255, $r + round($r * $percent / 100)));
-    $g = max(0, min(255, $g + round($g * $percent / 100)));
-    $b = max(0, min(255, $b + round($b * $percent / 100)));
-    return sprintf("#%02X%02X%02X", $r, $g, $b);
-}
-
-// AJAX 刷新验证码
-add_action('wp_ajax_nopriv_aurawp_refresh_captcha', 'aurawp_ajax_refresh_captcha');
-add_action('wp_ajax_aurawp_refresh_captcha', 'aurawp_ajax_refresh_captcha');
-function aurawp_ajax_refresh_captcha() {
-    echo aurawp_generate_captcha();
-    wp_die();
-}
-
-require get_template_directory() . '/inc/customizer.php';
-// 主题基础支持
-add_theme_support('post-thumbnails');
-add_theme_support('title-tag');
-add_theme_support('html5', ['search-form', 'comment-form', 'comment-list']);
-
-// 浏览量统计（用于热门文章）
-function aurawp_set_post_views() {
-    if (!is_single()) return;
-    $post_id = get_the_ID();
-    $count_key = 'views';
-    $count = get_post_meta($post_id, $count_key, true);
-    if ($count == '') {
-        delete_post_meta($post_id, $count_key);
-        add_post_meta($post_id, $count_key, '0');
-    } else {
-        update_post_meta($post_id, $count_key, (int)$count + 1);
-    }
-}
-add_action('wp_head', 'aurawp_set_post_views');
-
-// 自定义摘要长度
+// 自定义摘要长度（28字）
 function aurawp_custom_excerpt_length($length) {
     return 28;
 }
 add_filter('excerpt_length', 'aurawp_custom_excerpt_length', 999);
 
-// 移除WordPress版本号
-remove_action('wp_head', 'wp_generator');
+// 浏览量统计
+function get_post_views($post_id) {
+    $count_key = 'views';
+    $count = get_post_meta($post_id, $count_key, true);
+    if ($count == '') {
+        delete_post_meta($post_id, $count_key);
+        add_post_meta($post_id, $count_key, '0');
+        return "0";
+    }
+    return $count;
+}
+
+function set_post_views() {
+    if (is_single()) {
+        global $post;
+        $post_id = $post->ID;
+        $count_key = 'views';
+        $count = get_post_meta($post_id, $count_key, true);
+        if ($count == '') {
+            $count = 0;
+            delete_post_meta($post_id, $count_key);
+            add_post_meta($post_id, $count_key, '0');
+        } else {
+            $count++;
+            update_post_meta($post_id, $count_key, $count);
+        }
+    }
+}
+add_action('wp_head', 'set_post_views');
+
+// 自动检测文章中的网盘链接
+function aurawp_detect_download_links($content) {
+    if (is_admin() || !in_the_loop() || !is_main_query()) {
+        return $content;
+    }
+
+    $post_id = get_the_ID();
+    if (!get_post_meta($post_id, '_auto_detected_links_processed', true)) {
+        $links = array();
+
+        // 百度网盘
+        if (preg_match('/https?:\/\/pan\.baidu\.com\/(s|share)\/[a-zA-Z0-9]+/', $content, $matches)) {
+            $links['baidu'] = $matches[0];
+        }
+        // 阿里云盘
+        if (preg_match('/https?:\/\/www\.aliyundrive\.com\/s\/[a-zA-Z0-9]+/', $content, $matches)) {
+            $links['aliyun'] = $matches[0];
+        }
+        // 蓝奏云
+        if (preg_match('/https?:\/\/(www\.)?lanzou[w]?\.com\/[a-zA-Z0-9]+/', $content, $matches)) {
+            $links['lanzou'] = $matches[0];
+        }
+        // 夸克网盘
+        if (preg_match('/https?:\/\/pan\.quark\.cn\/s\/[a-zA-Z0-9]+/', $content, $matches)) {
+            $links['quark'] = $matches[0];
+        }
+        // 城通网盘
+        if (preg_match('/https?:\/\/[a-z0-9]+\.ctfile\.com\/[a-zA-Z0-9\/]+/', $content, $matches)) {
+            $links['ctfile'] = $matches[0];
+        }
+
+        if (!empty($links)) {
+            update_post_meta($post_id, '_auto_detected_links', $links);
+        }
+        update_post_meta($post_id, '_auto_detected_links_processed', '1');
+    }
+
+    return $content;
+}
+add_filter('the_content', 'aurawp_detect_download_links');
+
+// 添加自定义字段到 REST API（用于古腾堡）
+function aurawp_register_rest_fields() {
+    register_rest_field('post', 'download_url', array(
+        'get_callback' => function($post_arr) {
+            return get_post_meta($post_arr['id'], 'download_url', true);
+        },
+        'update_callback' => null,
+        'schema' => null,
+    ));
+}
+add_action('rest_api_init', 'aurawp_register_rest_fields');
